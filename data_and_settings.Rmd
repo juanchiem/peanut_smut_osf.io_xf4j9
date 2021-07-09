@@ -1,0 +1,50 @@
+```{r}
+library(tidyverse)
+my_theme <- theme_bw()+
+  theme(panel.grid.minor = element_blank())+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+conc_set <- list(
+  coord_equal(), 
+  geom_abline(slope=1, intercept = 0, col="grey",alpha=.5),
+  ylim(c(0,.5)), 
+  xlim(c(0,.5))
+)
+```
+
+```{r, eval=FALSE}
+raw <- readr::read_csv("data/peanut_smut_survey.csv")
+raw %>% glimpse
+skimr::skim(raw)
+```
+
+```{r, eval=FALSE}
+dat <- 
+  raw %>% 
+  mutate(id=interaction(department, harvest_year)) %>% 
+  mutate(diseased_pods = rowSums(select(., matches('class_')))) %>% 
+  mutate(global_inc=diseased_pods/total_pods, 
+         class.1_inc=class_1/total_pods,
+         class.2_inc=class_2/total_pods,
+         class.3_inc=class_3/total_pods,
+         class.4_inc=class_4/total_pods 
+         ) %>% 
+  mutate(DSI = (1*class_1+2*class_2+3*class_3+4*class_4)/total_pods,
+    sev0_1 = (0.05*class_1 +0.1*class_2 + 0.75*class_3 + 1*class_4)/total_pods)
+dat
+```
+
+Full dataset
+
+```{r, eval=FALSE}
+dat %>% 
+  tabyl(department, harvest_year) %>% 
+  adorn_totals()
+```
+
+Each count within the above two-way table represents the number of field assessed. 
+
+```{r, eval=FALSE}
+save(dat, file="data/data.RData")
+```
+

@@ -1,0 +1,164 @@
+```{r, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+pacman::p_load(tidyverse, janitor)
+load(here::here("data/data.RData"))
+knitr::knit_child('data_and_settings.Rmd', quiet = TRUE)
+```
+
+```{r}
+dat %>% skimr::skim() 
+library(ggstance)
+```
+
+```{r}
+dat %>% 
+  pivot_longer(cols = c("DSI", "global_inc"), 
+               names_to = "var", 
+               values_to = "val") %>%    
+  mutate(harvest_year=forcats::fct_rev(factor(harvest_year))) %>%
+  mutate(var=fct_recode(var, 
+                        `Disease severity index` = "DSI", 
+                        `Disease incidence` = "global_inc")) %>%
+  ggplot() + 
+  aes(val)+
+  geom_histogram(alpha=.6, fill="steelblue")+
+  facet_grid(harvest_year~var, switch="x")+
+  stat_summaryh(fun.x=median,
+                geom="vline", alpha=.2,
+                aes(xintercept=..x.., y=0, 
+                    group = interaction(var, harvest_year)),
+                size=.51, colour="red") +
+  stat_summaryh(fun.x=median,
+                geom="text",
+                aes(y=10, label=..x.. %>% round(2)),
+                size=3, colour="red", angle=0, vjust=-.1) +
+  ylim(0,15)+
+  labs(x="", y = "Fields count")+
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), 
+        panel.grid.major = element_line(size=.1), 
+        strip.background = element_blank())+
+  theme(strip.placement = "outside")
+```
+
+
+```{r, eval=FALSE}
+ggsave(last_plot(), 
+       file = "plots/histograms.png", 
+       width = 5, height = 4)
+```
+
+
+```{r}
+```
+
+
+```{r}
+dat %>% 
+  pivot_longer(cols = starts_with("class_"), 
+               names_to = "var", 
+               values_to = "val") %>%   
+  group_by(harvest_year,var) %>% 
+  summarise(sum_n=sum(val)) %>% 
+  group_by(harvest_year) %>% 
+  mutate(freq = sum_n / sum(sum_n)*100, 
+         var=forcats::fct_rev(var), 
+         harvest_year = factor(harvest_year)) %>%
+  # filter(!harvest_year %in% c(2015,2019,2020)) %>% 
+  ggplot(aes(
+    x = harvest_year,
+    # x = reorder(Zona, super, sum),
+    y = freq, 
+    fill = var)) + 
+  geom_bar(stat = "identity", color = gray(.5)) +
+  geom_text(aes(label = freq %>% round(1)), 
+            position = position_stack(vjust = 0.5),
+            col = "white", fontface = "bold", size = 3)+
+  scale_fill_viridis_d(begin = .1, end =.9, direction = 1)+
+  labs(fill= "Disease class", 
+       x="Harvest year", 
+       y = "Class frequency")+
+  theme_bw()
+```
+
+
+```{r, eval=FALSE}
+ggsave(last_plot(), 
+       file = "plots/stacked_bar.png", 
+       width = 5, height = 5)
+```
+
+```{r}
+# dat %>% 
+#   pivot_longer(cols = starts_with("class"), 
+#                names_to = "var", 
+#                values_to = "val") %>%   
+#   group_by(harvest_year,var) %>% 
+#   summarise(sum_n=sum(val)) %>% 
+#   group_by(harvest_year) %>% 
+#   mutate(freq = sum_n / sum(sum_n)*100, 
+#          var=forcats::fct_rev(var) 
+#          ) %>%
+#   filter(!harvest_year %in% c(2019)) %>%
+#   ggplot(aes(
+#     x = harvest_year,
+#     y = freq, 
+#     col = var)) + 
+#    geom_point() + geom_smooth(method="lm")+
+#   labs(col= "Disease class")+
+#   theme_bw()
+```
+
+# Modeling
+
+Chi square test
+
+```{r}
+dat %>% 
+    pivot_longer(cols = starts_with("class_"), 
+               names_to = "var", 
+               values_to = "val") %>%   
+  group_by(harvest_year,var) %>% 
+  summarise(sum_n=sum(val)) %>% 
+  pivot_wider(names_from = harvest_year, 
+              values_from = sum_n) %>%
+  column_to_rownames(var="var") %>% 
+  chisq.test(.) -> result
+
+result
+result$expected
+result$observed
+```
+
+> The disease severity classes frequency varies along the years
+
+# Correlations 
+
+```{r}
+pacman::p_load(correlation)
+```
+
+```{r}
+dat %>% 
+  dplyr::select(ends_with("inc")) %>% 
+  correlation() %>% 
+  knitr::kable()
+```
+
+```{r}
+dat %>% 
+  pivot_longer(
+    cols = starts_with("class."),
+    names_to = "metric", 
+    values_to = "Severity class incidence") %>% 
+  mutate(metric = str_replace(metric, "_inc", "")) %>% 
+  # count(metric)
+  ggplot()+
+  aes(x=global_inc, 
+      y=`Severity class incidence`)+
+  geom_point()+
+  labs(x="Global incidence")+
+  facet_wrap("metric")+
+  my_theme + conc_set 
+```
+
