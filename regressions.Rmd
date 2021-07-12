@@ -2,10 +2,10 @@
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
 pacman::p_load(tidyverse, janitor)
 load("data/data.RData")
-knitr::knit_child('data_and_settings.Rmd', quiet = TRUE)
+source(here::here("ggplot_theme.r"))
 ```
 
-Filter the dataset for those environments (year * department) with at least 10% of disease global incidence range
+Filter the dataset for those environments (year * department) with at least 10% of peanut smut incidence range
 
 ```{r}
 dat1 <- dat %>% 
