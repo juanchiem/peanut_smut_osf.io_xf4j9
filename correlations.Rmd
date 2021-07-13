@@ -2,15 +2,15 @@
 knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
 pacman::p_load(tidyverse, janitor)
 load(here::here("data/data.RData"))
-knitr::knit_child('data_and_settings.Rmd', quiet = TRUE)
+source(here::here("ggplot_theme.r"))
 ```
 
 ```{r}
 dat %>% skimr::skim() 
-library(ggstance)
 ```
 
 ```{r}
+library(ggstance)
 dat %>% 
   pivot_longer(cols = c("DSI", "global_inc"), 
                names_to = "var", 
@@ -46,10 +46,6 @@ dat %>%
 ggsave(last_plot(), 
        file = "plots/histograms.png", 
        width = 5, height = 4)
-```
-
-
-```{r}
 ```
 
 
