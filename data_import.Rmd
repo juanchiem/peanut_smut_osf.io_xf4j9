@@ -1,13 +1,17 @@
 ```{r}
-if (!require("pacman")) install.packages("pacman")
+# if (!require("pacman")) install.packages("pacman") # just once
 pacman::p_load(tidyverse, janitor, skimr)
 ```
+
+Import data from .csv, and visualize its structure and variables
 
 ```{r, eval=FALSE}
 raw <- readr::read_csv("data/peanut_smut_survey.csv")
 raw %>% glimpse
 skimr::skim(raw)
 ```
+
+Calculate incidences (general, and for each severity class) and disease severity index (DSI)
 
 ```{r, eval=FALSE}
 dat <- 
@@ -21,11 +25,15 @@ dat <-
          class.4_inc=class_4/total_pods 
          ) %>% 
   mutate(DSI = (1*class_1+2*class_2+3*class_3+4*class_4)/total_pods,
-    sev0_1 = (0.05*class_1 +0.1*class_2 + 0.75*class_3 + 1*class_4)/total_pods)
-dat
+    sev0_1 = (0.05*class_1 +0.1*class_2 + 0.75*class_3 + 1*class_4)/total_pods) %>% 
+    mutate_at(vars(matches('inc|sev')), ~(. * 100 )%>% round(2))
+  
+dat %>% view
 ```
 
-Full dataset
+Check the full dataset via a two-way table (year and location)
+
+Each count within the above two-way table represents the number of field assessed
 
 ```{r, eval=FALSE}
 dat %>% 
@@ -33,7 +41,7 @@ dat %>%
   adorn_totals()
 ```
 
-Each count within the above two-way table represents the number of field assessed. 
+Save the tidy data for further analysis
 
 ```{r, eval=FALSE}
 save(dat, file="data/data.RData")

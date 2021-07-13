@@ -1,0 +1,613 @@
+```{r, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+pacman::p_load(tidyverse, janitor)
+load("data/data.RData")
+source(here::here("ggplot_theme.r"))
+```
+
+Check variables distributions 
+
+```{r}
+pacman::p_load(ggstance) # for stat_summaryh
+```
+
+```{r}
+dat %>% 
+  pivot_longer(cols = c("DSI", "global_inc"), 
+               names_to = "var", 
+               values_to = "val") %>%    
+  mutate(harvest_year=forcats::fct_rev(factor(harvest_year))) %>%
+  mutate(var=fct_recode(var, 
+                        `Disease severity index` = "DSI", 
+                        `Disease incidence` = "global_inc")) %>%
+  ggplot() + 
+  aes(val)+
+  geom_histogram(alpha=.6, fill="steelblue")+
+  facet_grid(harvest_year~var, switch="x", scales = "free_x")+
+  stat_summaryh(fun.x=median,
+                geom="vline", alpha=.2,
+                aes(xintercept=..x.., y=0, 
+                    group = interaction(var, harvest_year)),
+                size=.51, colour="red") +
+  stat_summaryh(fun.x=median,
+                geom="text",
+                aes(y=10, label=..x.. %>% round(2)),
+                size=3, colour="red", angle=0, vjust=-.1) +
+  # ylim(0,15)+
+  labs(x="", y = "Fields count")+
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(), 
+        panel.grid.major = element_line(size=.1), 
+        strip.background = element_blank())+
+  theme(strip.placement = "outside")
+```
+
+```{r, eval=FALSE}
+ggsave(last_plot(), 
+       file = "plots/histograms.png", 
+       width = 5, height = 4)
+```
+
+Disease class frequency along the years
+
+```{r}
+dat %>% 
+  pivot_longer(cols = starts_with("class_"), 
+               names_to = "var", 
+               values_to = "val") %>%   
+  group_by(harvest_year,var) %>% 
+  summarise(sum_n=sum(val)) %>% 
+  group_by(harvest_year) %>% 
+  mutate(freq = sum_n / sum(sum_n)*100, 
+         var=forcats::fct_rev(var), 
+         harvest_year = factor(harvest_year)) %>%
+  # filter(!harvest_year %in% c(2015,2019,2020)) %>% 
+  ggplot(aes(
+    x = harvest_year,
+    # x = reorder(Zona, super, sum),
+    y = freq, 
+    fill = var)) + 
+  geom_bar(stat = "identity", color = gray(.5)) +
+  geom_text(aes(label = freq %>% round(1)), 
+            position = position_stack(vjust = 0.5),
+            col = "white", fontface = "bold", size = 3)+
+  scale_fill_viridis_d(begin = .1, end =.9, direction = 1)+
+  labs(fill= "Disease class", 
+       x="Harvest year", 
+       y = "Class frequency")+
+  theme_bw()
+```
+
+```{r, eval=FALSE}
+ggsave(last_plot(), 
+       file = "plots/stacked_bar.png", 
+       width = 5, height = 5)
+```
+
+Let's have a first visualization of the data. As a first step, we wanted to see the relationship between each severity class incidence vs the field incidence, then each point represents one field comparison of the pair x-class incidence vs field incidence. The closest the point is to the 1:1 diagonal line, the better it explain the field incidence. 
+
+```{r}
+dat %>% 
+  pivot_longer(
+    cols = starts_with("class."),
+    names_to = "metric", 
+    values_to = "Severity class incidence") %>% 
+  mutate(metric = str_replace(metric, "_inc", "")) %>% 
+  # count(metric)
+  ggplot()+
+  aes(x=global_inc, 
+      y=`Severity class incidence`)+
+  geom_point()+
+  labs(x="Disease incidence")+
+  facet_wrap("metric")+
+  my_theme + conc_set 
+```
+
+As we adopted a mixed regression model approach to estimate the regression coefficients based on the id-level regressions, we kept only those environments (department * year) with more than 3 fields assessed and at least 5% of peanut smut incidence range. This restriction allowed us to estimate an id-level regression as random effect and the overall line regression as fixed effect.  
+
+```{r}
+dat %>%   
+  group_by(harvest_year, department)  %>% 
+  mutate(min = min(global_inc),
+         max = max(global_inc),         
+         range = max-min,
+         n = n(), 
+         keep = case_when(range >4.99 & n > 3 ~ "yes", 
+                          TRUE ~ "no")) %>%   
+  ggplot()+
+  aes(y=id, x=global_inc, col=keep)+
+  geom_pointrangeh(aes(xmin = min, xmax = max), size=.1, alpha=.7)+
+  my_theme2+
+  labs(x="Peanut smut incidence")
+               
+```
+
+Let's call "dat1" to the ready-to-model dataset
+
+```{r}
+dat1 <- dat %>% 
+  group_by(harvest_year, department)  %>% 
+  mutate(min = min(global_inc),
+         max = max(global_inc),         
+         range = max-min,
+         n = n(), 
+         keep = case_when(range >4.99 & n > 3 ~ "yes", 
+                          TRUE ~ "no")) %>%   
+  ungroup %>% 
+  filter(keep=="yes") %>% 
+  as.data.frame() # for avoiding bug with ggpredict package
+```
+
+Check dat1 
+
+```{r}
+dat1 %>% 
+  tabyl(department, harvest_year) %>% 
+  adorn_totals()
+```
+
+Have a glance of dat1
+
+```{r}
+dat1 %>% head(15)
+```
+
+# Modeling
+
+```{r}
+pacman::p_load(car, 
+               nlme,        # for adjusting the mixed linear regression 
+               lattice, 
+               performance, # for calculating model R2
+               ggeffects,   # for estimating predicted values
+               ggtext,      # for including model coefficients and R2 in the plots
+               glue         # for writing model coefficients and R2
+               )
+ctrl <- lmeControl(opt='optim')
+```
+
+Class 1 incidence vs Disease incidence
+
+As most of the field disease assessments we have lots of the observations accumulated in the <10% incidence portion. That could lead to heteroscedasticity issues in our regression fit. So we used the "lme" function from "nlme" package to deal with the increased variance along the x-axis. We included the argument `weights=varPower(form = ~global_inc)` for modelling the variance.  
+   
+
+```{r}
+m1<-lme(class.1_inc ~ global_inc, 
+          random = ~global_inc|id,
+          weights=varPower(form = ~global_inc),
+          data=dat1)
+```
+
+
+```{r, eval=F}
+png(filename="plots/class1_reg_diagnostics.png",
+    type="cairo",
+    units="in",
+    width=4,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+
+```{r}
+plot(m1)
+dev.off()
+```
+
+```{r}
+summary(m1)
+```
+
+Id-level plots
+
+```{r}
+png(filename="plots/class1_id_level.png",
+    type="cairo",
+    units="in",
+    width=6,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+
+```{r}
+xyplot(class.1_inc~global_inc | id, data=dat1, fit=m1,
+       strip=strip.custom(bg="white"), 
+       par.strip.text=list(cex=.5),
+       pch=16, cex=0.7, col='grey30',
+       panel = function(x, y, ..., fit, subscripts) {
+         panel.xyplot(x, y, ...)
+         ypred <- fitted(fit)[subscripts]
+         panel.lines(x, ypred, col="black", lwd=1)
+       },
+       ylab="Class-1 Incidence ", xlab="Disease incidence")
+dev.off()
+```
+
+Fixed effects plot 
+
+```{r}
+df1 <- data.frame(x = 0, y = 50,
+  label = glue(
+    "y = {round(summary(m1)$tTable[1,1],3)} + {round(summary(m1)$tTable[2,1],3)} * x\n"
+    )  
+  ) 
+
+p1 <- ggpredict(m1, terms="global_inc [all]") %>% 
+  ggplot()+
+  aes(x = x, y = predicted) +
+  geom_smooth(data=dat1, aes(x = global_inc, y = class.1_inc, group=id), 
+              method="lm", se=F, col="grey30", size=.5)+
+  geom_point(data=dat1, aes(x = global_inc, y = class.1_inc), size=.3)+
+  geom_line(size=1, col="#3366FF")+
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
+  labs(y="Class-1 Incidence ",  x = element_blank())+
+  my_theme + conc_set +
+  geom_richtext(
+    data = df1,
+    aes(x=x, y=y, label = label),
+    hjust = 0, vjust = 1, 
+    label.color = NA,
+    # fill = alpha("grey30", .2)
+  )
+p1
+```
+
+Continue with all the class levels...
+
+```{r}
+m2<-lme(class.2_inc~global_inc, 
+          random = ~global_inc|id,
+          weights=varPower(form = ~global_inc),
+          data=dat1)
+```
+
+```{r}
+png(filename="plots/class2_reg_diagnostics.png",
+    type="cairo",
+    units="in",
+    width=4,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+```{r}
+plot(m2)
+```
+
+```{r, eval=F}
+dev.off()
+```
+
+```{r}
+summary(m2)
+```
+
+```{r}
+png(filename="plots/class2_id_level.png",
+    type="cairo",
+    units="in",
+    width=6,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+
+```{r}
+xyplot(class.2_inc~global_inc | id, data=dat1, fit=m2,
+       strip=strip.custom(bg="white"), 
+       par.strip.text=list(cex=.5),
+       pch=16, cex=0.7, col='grey30',
+       panel = function(x, y, ..., fit, subscripts) {
+         panel.xyplot(x, y, ...)
+         ypred <- fitted(fit)[subscripts]
+         panel.lines(x, ypred, col="black", lwd=1)
+       },
+       ylab="Class-2 Incidence", xlab="Disease incidence")
+```
+
+
+```{r}
+dev.off()
+```
+
+```{r}
+df2 <- data.frame(x = 0, y = 50,
+  label = glue(
+    "y = {round(summary(m2)$tTable[1,1],2)} + {round(summary(m2)$tTable[2,1],3)} * x\n"
+    # (*R<sup>2</sup>* = {round(r2_nakagawa(m2)$R2_conditional, 3)})"
+    )  
+  ) 
+
+p2 <- ggpredict(m2, terms="global_inc [all]") %>% 
+  ggplot() +
+  aes(x = x, y = predicted)+
+  geom_smooth(data=dat1, aes(x = global_inc, y = class.2_inc, group=id), 
+              method="lm", se=F, col="grey30", size=.5, alpha=.5)+
+  geom_point(data=dat1, aes(x = global_inc, y = class.2_inc), size=.3)+
+  geom_line(size=1, col="#3366FF")+
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
+  labs(y="Class-2 Incidence",  x = element_blank())+
+  my_theme+conc_set + 
+    geom_richtext(
+    data = df2,
+    aes(x=x, y=y, label = label),
+    hjust = 0, vjust = 1, 
+    label.color = NA
+    )
+p2
+```
+
+
+```{r}
+m3<-lme(class.3_inc~global_inc, 
+        random = ~global_inc|id,
+        control=ctrl,
+        weights=varPower(form = ~global_inc),
+        data=dat1)
+```
+
+
+```{r, eval=F}
+png(filename="plots/class3_reg_diagnostics.png",
+    type="cairo",
+    units="in",
+    width=4,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+
+```{r}
+plot(m3)
+```
+
+
+```{r, eval=F}
+dev.off()
+```
+
+```{r}
+png(filename="plots/class3_id_level.png",
+    type="cairo",
+    units="in",
+    width=6,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+
+```{r}
+xyplot(class.3_inc~global_inc | id, data=dat1, fit=m3,
+       strip=strip.custom(bg="white"), 
+       par.strip.text=list(cex=.5),
+       pch=16, cex=0.7, col='grey30',
+       panel = function(x, y, ..., fit, subscripts) {
+         panel.xyplot(x, y, ...)
+         ypred <- fitted(fit)[subscripts]
+         panel.lines(x, ypred, col="black", lwd=1)
+       },
+       ylab="Class-3 Incidence", xlab="Disease incidence ")
+```
+
+
+```{r}
+dev.off()
+```
+
+
+```{r}
+df3 <- data.frame(x = 0, y = 50,
+  label = glue(
+    "y = {round(summary(m3)$tTable[1,1],3)} + {round(summary(m3)$tTable[2,1],3)} * x\n")  
+  ) 
+
+p3 <- ggpredict(m3, terms="global_inc [all]") %>% 
+  ggplot() +
+  aes(x = x, y = predicted)+
+  geom_smooth(data=dat1, aes(x = global_inc, y = class.3_inc, group=id), 
+              method="lm", se=F, col="grey30", size=.5)+
+  geom_point(data=dat1, aes(x = global_inc, y = class.3_inc), size=.3)+
+  geom_line(size=1, col="#3366FF")+
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
+  labs(y="Class-3 Incidence ",  x = element_blank())+
+  my_theme+conc_set + 
+  geom_richtext(
+    data = df3,
+    aes(x=x, y=y, label = label),
+    hjust = 0, vjust = 1, 
+    label.color = NA)
+p3
+```
+
+```{r}
+m4<-lme(class.4_inc~global_inc, 
+          random = ~global_inc|id,
+          control=ctrl,
+          weights=varPower(form = ~global_inc),
+          data=dat1)
+```
+
+
+```{r}
+png(filename="plots/class4_reg_diagnostics.png",
+    type="cairo",
+    units="in",
+    width=4,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+
+```{r}
+plot(m4)
+```
+
+
+```{r}
+dev.off()
+```
+
+```{r}
+png(filename="plots/class4_id_level.png",
+    type="cairo",
+    units="in",
+    width=6,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+
+```{r}
+xyplot(class.4_inc~global_inc|id, data=dat1, fit=m4,
+       strip=strip.custom(bg="white"), 
+       par.strip.text=list(cex=.5),
+       pch=16, cex=0.7, col='grey30',
+       panel = function(x, y, ..., fit, subscripts) {
+         panel.xyplot(x, y, ...)
+         ypred <- fitted(fit)[subscripts]
+         panel.lines(x, ypred, col="black", lwd=1)
+       },
+       ylab="Class-4 Incidence ", xlab="Disease incidence ")
+```
+
+
+```{r}
+dev.off()
+```
+
+
+```{r}
+df4 <- data.frame(x = 0, y = 50,
+  label = glue(
+    "y = {round(summary(m4)$tTable[1,1],3)} + {round(summary(m4)$tTable[2,1],3)} * x\n")  
+  ) 
+
+p4 <- ggpredict(m4, terms="global_inc [all]") %>% 
+ggplot() +
+  aes(x = x, y = predicted)+
+  geom_smooth(data=dat1, aes(x = global_inc, y = class.4_inc, group=id), 
+              method="lm", se=F, col="grey30", size=.5)+
+  geom_point(data=dat1, aes(x = global_inc, y = class.4_inc), size=.3)+
+  geom_line(size=1, col="#3366FF")+    
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
+  labs(y="Class-4 Incidence",  x = element_blank())+
+  my_theme + 
+  conc_set + 
+    geom_richtext(
+    data = df4,
+    aes(x=x, y=y, label = label),
+    hjust = 0, vjust = 1, 
+    label.color = NA) 
+p4
+```
+
+```{r}
+pacman::p_load(patchwork)
+p.1234 <- (p1 + p2) / (p3 + p4) + 
+  plot_annotation(
+    caption = 'Disease incidence',
+    theme = theme(plot.caption = element_text(hjust = .5, size = 12))
+  )
+p.1234
+```
+
+As we can see, class 3 and 4 regressions are the most close to the diagonal line. So we considered including a class 3 + class 4 incidence, to test against the disease incidence.  
+
+```{r}
+dat1<- dat1 %>% 
+  mutate(class.3.4_inc=(class_3+class_4)/total_pods*100)
+
+m3.4<-lme(class.3.4_inc~global_inc, 
+          random = ~global_inc|id,
+          control=ctrl,
+          weights=varPower(form = ~global_inc),
+          data=dat1)
+```
+
+
+```{r}
+png(filename="plots/class3.4_reg_diagnostics.png",
+    type="cairo",
+    units="in",
+    width=4,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+
+```{r}
+plot(m3.4)
+dev.off()
+```
+
+```{r}
+png(filename="plots/class3.4_id_level.png",
+    type="cairo",
+    units="in",
+    width=6,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+```{r}
+xyplot(class.3.4_inc~global_inc | id, data=dat1, fit=m3.4,
+       strip=strip.custom(bg="white"), 
+       par.strip.text=list(cex=.5),
+       pch=16, cex=0.7, col='grey30',
+       panel = function(x, y, ..., fit, subscripts) {
+         panel.xyplot(x, y, ...)
+         ypred <- fitted(fit)[subscripts]
+         panel.lines(x, ypred, col="black", lwd=1)
+       },
+       ylab="Class-4 Incidence ", xlab="Disease incidence ")
+dev.off()
+```
+
+```{r}
+df3.4 <- data.frame(x = 0, y = 50,
+  label = glue(
+    "y = {round(summary(m3.4)$tTable[1,1],3)} + {round(summary(m3.4)$tTable[2,1],3)} * x\n")  
+  ) 
+
+p3.4 <- ggpredict(m3.4, terms="global_inc [all]") %>% 
+  ggplot() +
+  aes(x = x, y = predicted)  +
+  geom_smooth(data=dat1, aes(x = global_inc, y = class.3.4_inc, group=id), 
+              method="lm", se=F, col="grey30", size=.5)+
+  geom_point(data=dat1, aes(x = global_inc, y = class.3.4_inc), size=.3)+
+  geom_line(size=1, col="#3366FF")+
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
+  labs(y="Class-3+4 Incidence ", x="")+
+  my_theme + 
+  conc_set + 
+  geom_richtext(
+    data = df3.4,
+    aes(x=x, y=y, label = label),
+    hjust = 0, vjust = 1, 
+    label.color = NA
+  ) 
+p3.4
+```
+
+```{r}
+(p.1234 | p3.4 )+
+    plot_annotation(
+    caption = 'Disease incidence',
+    theme = theme(plot.caption = element_text(hjust = .5, size = 12))
+  )
+```
+
+```{r, eval =F}
+ggsave(last_plot(), file = "plots/regressions.png", width = 9, height = 6)
+```
