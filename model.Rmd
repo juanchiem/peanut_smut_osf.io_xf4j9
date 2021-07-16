@@ -72,15 +72,32 @@ dat %>%
             position = position_stack(vjust = 0.5),
             col = "white", fontface = "bold", size = 3)+
   scale_fill_viridis_d(begin = .1, end =.9, direction = 1)+
-  labs(fill= "Disease class", 
+  labs(fill= "Disease\nseverity class", 
        x="Harvest year", 
-       y = "Class frequency")+
+       y = "Frequency (%)")+
   theme_bw()
 ```
 
 ```{r, eval=FALSE}
 ggsave(last_plot(), 
        file = "plots/stacked_bar.png", 
+       width = 5, height = 5)
+```
+
+```{r}
+dat %>% 
+  ggplot()+
+  aes(x=DSI, 
+      y=global_inc)+
+  geom_point()+
+  labs(x= "DSI",
+       y="Disease incidence (%)")+
+  my_theme + conc_set 
+```
+
+```{r, eval=FALSE}
+ggsave(last_plot(), 
+       file = "plots/DSI_inc.png", 
        width = 5, height = 5)
 ```
 

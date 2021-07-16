@@ -5,7 +5,7 @@ pacman::p_load(tidyverse, janitor, skimr)
 
 Import data from .csv, and visualize its structure and variables
 
-```{r, eval=FALSE}
+```{r}
 raw <- readr::read_csv("data/peanut_smut_survey.csv")
 raw %>% glimpse
 skimr::skim(raw)
@@ -13,7 +13,7 @@ skimr::skim(raw)
 
 Calculate incidences (general, and for each severity class) and disease severity index (DSI)
 
-```{r, eval=FALSE}
+```{r}
 dat <- 
   raw %>% 
   mutate(id=interaction(department, harvest_year)) %>% 
@@ -24,10 +24,18 @@ dat <-
          class.3_inc=class_3/total_pods,
          class.4_inc=class_4/total_pods 
          ) %>% 
-  mutate(DSI = (1*class_1+2*class_2+3*class_3+4*class_4)/total_pods,
-    sev0_1 = (0.05*class_1 +0.1*class_2 + 0.75*class_3 + 1*class_4)/total_pods) %>% 
+  rowwise() %>% 
+  mutate(DSI = ((1*class_1+2*class_2+3*class_3+4*class_4)/(total_pods*4))*100)%>% 
     mutate_at(vars(matches('inc|sev')), ~(. * 100 )%>% round(2))
-  
+
+# dat %>% 
+#   select(id, total_pods, starts_with("class")) %>% 
+#   rowwise() %>% 
+#   mutate(DSI = ((1*class_1+2*class_2+3*class_3+4*class_4)/(total_pods*4))*100) %>% 
+#   ggplot()+
+#   aes(DSI)+
+#   geom_histogram()
+
 dat %>% view
 ```
 
@@ -35,7 +43,7 @@ Check the full dataset via a two-way table (year and location)
 
 Each count within the above two-way table represents the number of field assessed
 
-```{r, eval=FALSE}
+```{r}
 dat %>% 
   tabyl(department, harvest_year) %>% 
   adorn_totals()
@@ -43,7 +51,7 @@ dat %>%
 
 Save the tidy data for further analysis
 
-```{r, eval=FALSE}
+```{r}
 save(dat, file="data/data.RData")
 ```
 
