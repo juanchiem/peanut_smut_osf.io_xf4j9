@@ -219,28 +219,15 @@ summary(m1)
 Id-level plots
 
 ```{r}
-png(filename="plots/class1_id_level.png",
-    type="cairo",
-    units="in",
-    width=6,
-    height=4,
-    pointsize=12,
-    res=96)
-```
+dat1 %>% 
+  ggplot() +
+  aes(x = global_inc, y = class.1_inc)+
+  facet_wrap(~id) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = cbind(dat1, pred = predict(m1)), aes(y = pred), size = 1)+
+  my_theme2
 
-
-```{r}
-xyplot(class.1_inc~global_inc | id, data=dat1, fit=m1,
-       strip=strip.custom(bg="white"), 
-       par.strip.text=list(cex=.5),
-       pch=16, cex=0.7, col='grey30',
-       panel = function(x, y, ..., fit, subscripts) {
-         panel.xyplot(x, y, ...)
-         ypred <- fitted(fit)[subscripts]
-         panel.lines(x, ypred, col="black", lwd=1)
-       },
-       ylab="Class-1 Incidence ", xlab="Disease incidence")
-dev.off()
+# ggsave(last_plot(), file = "plots/class1_id_level.png", units="in", w=6, h=4)
 ```
 
 Fixed effects plot 
@@ -304,32 +291,15 @@ summary(m2)
 ```
 
 ```{r}
-png(filename="plots/class2_id_level.png",
-    type="cairo",
-    units="in",
-    width=6,
-    height=4,
-    pointsize=12,
-    res=96)
-```
+dat1 %>% 
+  ggplot() +
+  aes(x = global_inc, y = class.2_inc)+
+  facet_wrap(~id) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = cbind(dat1, pred = predict(m2)), aes(y = pred), size = 1)+
+  my_theme2
 
-
-```{r}
-xyplot(class.2_inc~global_inc | id, data=dat1, fit=m2,
-       strip=strip.custom(bg="white"), 
-       par.strip.text=list(cex=.5),
-       pch=16, cex=0.7, col='grey30',
-       panel = function(x, y, ..., fit, subscripts) {
-         panel.xyplot(x, y, ...)
-         ypred <- fitted(fit)[subscripts]
-         panel.lines(x, ypred, col="black", lwd=1)
-       },
-       ylab="Class-2 Incidence", xlab="Disease incidence")
-```
-
-
-```{r}
-dev.off()
+ggsave(last_plot(), file = "plots/class2_id_level.png", units="in", w=6, h=4)
 ```
 
 ```{r}
@@ -390,34 +360,16 @@ dev.off()
 ```
 
 ```{r}
-png(filename="plots/class3_id_level.png",
-    type="cairo",
-    units="in",
-    width=6,
-    height=4,
-    pointsize=12,
-    res=96)
+dat1 %>% 
+  ggplot() +
+  aes(x = global_inc, y = class.3_inc)+
+  facet_wrap(~id) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = cbind(dat1, pred = predict(m3)), aes(y = pred), size = 1)+
+  my_theme2
+
+ggsave(last_plot(), file = "plots/class3_id_level.png", units="in", w=6, h=4)
 ```
-
-
-```{r}
-xyplot(class.3_inc~global_inc | id, data=dat1, fit=m3,
-       strip=strip.custom(bg="white"), 
-       par.strip.text=list(cex=.5),
-       pch=16, cex=0.7, col='grey30',
-       panel = function(x, y, ..., fit, subscripts) {
-         panel.xyplot(x, y, ...)
-         ypred <- fitted(fit)[subscripts]
-         panel.lines(x, ypred, col="black", lwd=1)
-       },
-       ylab="Class-3 Incidence", xlab="Disease incidence ")
-```
-
-
-```{r}
-dev.off()
-```
-
 
 ```{r}
 df3 <- data.frame(x = 0, y = 50,
@@ -473,32 +425,15 @@ dev.off()
 ```
 
 ```{r}
-png(filename="plots/class4_id_level.png",
-    type="cairo",
-    units="in",
-    width=6,
-    height=4,
-    pointsize=12,
-    res=96)
-```
+dat1 %>% 
+  ggplot() +
+  aes(x = global_inc, y = class.4_inc)+
+  facet_wrap(~id) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = cbind(dat1, pred = predict(m4)), aes(y = pred), size = 1)+
+  my_theme2
 
-
-```{r}
-xyplot(class.4_inc~global_inc|id, data=dat1, fit=m4,
-       strip=strip.custom(bg="white"), 
-       par.strip.text=list(cex=.5),
-       pch=16, cex=0.7, col='grey30',
-       panel = function(x, y, ..., fit, subscripts) {
-         panel.xyplot(x, y, ...)
-         ypred <- fitted(fit)[subscripts]
-         panel.lines(x, ypred, col="black", lwd=1)
-       },
-       ylab="Class-4 Incidence ", xlab="Disease incidence ")
-```
-
-
-```{r}
-dev.off()
+ggsave(last_plot(), file = "plots/class4_id_level.png", units="in", w=6, h=4)
 ```
 
 
@@ -568,27 +503,15 @@ dev.off()
 ```
 
 ```{r}
-png(filename="plots/class3.4_id_level.png",
-    type="cairo",
-    units="in",
-    width=6,
-    height=4,
-    pointsize=12,
-    res=96)
-```
+dat1 %>% 
+  ggplot() +
+  aes(x = global_inc, y = class.3.4_inc)+
+  facet_wrap(~id) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = cbind(dat1, pred = predict(m3.4)), aes(y = pred), size = 1)+
+  my_theme2
 
-```{r}
-xyplot(class.3.4_inc~global_inc | id, data=dat1, fit=m3.4,
-       strip=strip.custom(bg="white"), 
-       par.strip.text=list(cex=.5),
-       pch=16, cex=0.7, col='grey30',
-       panel = function(x, y, ..., fit, subscripts) {
-         panel.xyplot(x, y, ...)
-         ypred <- fitted(fit)[subscripts]
-         panel.lines(x, ypred, col="black", lwd=1)
-       },
-       ylab="Class-4 Incidence ", xlab="Disease incidence ")
-dev.off()
+ggsave(last_plot(), file = "plots/class3.4_id_level.png", units="in", w=6, h=4)
 ```
 
 ```{r}
