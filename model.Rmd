@@ -18,21 +18,33 @@ dat %>%
                values_to = "val") %>%    
   mutate(harvest_year=forcats::fct_rev(factor(harvest_year))) %>%
   mutate(var=fct_recode(var, 
-                        `Disease severity index` = "DSI", 
-                        `Disease incidence` = "global_inc")) %>%
+                        `Smut severity index` = "DSI", 
+                        `Smut incidence` = "global_inc")) %>%
   ggplot() + 
   aes(val)+
   geom_histogram(alpha=.6, fill="steelblue")+
   facet_grid(harvest_year~var, switch="x", scales = "free_x")+
   stat_summaryh(fun.x=median,
                 geom="vline", alpha=.2,
-                aes(xintercept=..x.., y=0, 
+                aes(xintercept=..x.., 
+                y=0, 
                     group = interaction(var, harvest_year)),
                 size=.51, colour="red") +
   stat_summaryh(fun.x=median,
                 geom="text",
-                aes(y=10, label=..x.. %>% round(2)),
+                aes(y=10, 
+                    label=..x.. %>% round(1)),
                 size=3, colour="red", angle=0, vjust=-.1) +
+  stat_summaryh(fun.x=max,
+                geom="vline", alpha=.2,
+                aes(xintercept=..x.., 
+                y=0, 
+                    group = interaction(var, harvest_year)),
+                size=.51, colour="grey") +
+  stat_summaryh(fun.x=max,
+                geom="text",
+                aes(y=10, label=..x.. %>% round(1)),
+                size=3, colour="grey", angle=0, vjust=-.1) +
   # ylim(0,15)+
   labs(x="", y = "Fields count")+
   theme_bw() + 
