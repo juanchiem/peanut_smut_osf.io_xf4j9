@@ -148,7 +148,7 @@ dat %>%
   geom_pointrangeh(aes(xmin = min, xmax = max), size=.1, alpha=.7)+
   my_theme2+
   labs(x="Peanut smut incidence")
-               
+             
 ```
 
 Let's call "dat1" to the ready-to-model dataset
@@ -164,6 +164,7 @@ dat1 <- dat %>%
                           TRUE ~ "no")) %>%   
   ungroup %>% 
   filter(keep=="yes") %>% 
+  mutate(class.3.4_inc=(class_3+class_4)/total_pods*100) %>% 
   as.data.frame() # for avoiding bug with ggpredict package
 ```
 
@@ -195,10 +196,72 @@ pacman::p_load(car,
 ctrl <- lmeControl(opt='optim')
 ```
 
-Class 1 incidence vs Disease incidence
 
 As most of the field disease assessments we have lots of the observations accumulated in the <10% incidence portion. That could lead to heteroscedasticity issues in our regression fit. So we used the "lme" function from "nlme" package to deal with the increased variance along the x-axis. We included the argument `weights=varPower(form = ~global_inc)` for modelling the variance.  
-   
+
+Field incidence vs DSI
+
+```{r}
+m0<-lme(global_inc ~ DSI, 
+          random = ~DSI|id,
+          weights=varPower(form = ~DSI),
+          data=dat1)
+
+# performance::check_heteroscedasticity(m0)
+# performance::check_distribution(m0)
+# plot(check_distribution(m0))
+# sqrt(mean(residuals(m0)^2))
+```
+
+Id-level plots
+
+```{r}
+dat1 %>% 
+  ggplot() +
+  aes(x = DSI, y = global_inc)+
+  facet_wrap(~id) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = cbind(dat1, pred = predict(m0)), aes(y = pred), size = 1)+
+  my_theme + conc_set 
+
+ggsave(last_plot(), file = "plots/DSI_inc_id_level.png", units="in", w=6, h=4)
+```
+
+Fixed effects plot 
+
+```{r}
+df0 <- data.frame(x = 50, y = 0,
+  label = glue(
+    "y = {round(summary(m0)$tTable[1,1],3)} + {round(summary(m0)$tTable[2,1],3)} * x\n"
+    )  
+  ) 
+
+p0 <- ggpredict(m0, terms="DSI [all]") %>% 
+  ggplot()+
+  aes(x = x, y = predicted) +
+  geom_line(data = cbind(dat1, pred = predict(m0)), 
+            aes(y = pred, x=DSI, group=id), col="grey30", size=.5)+
+  # geom_smooth(data=dat1, aes(x = global_inc, y = class.1_inc, group=id), 
+  #             method="lm", se=F, col="grey30", size=.5)+
+  geom_point(data=dat1, aes(x = DSI, y = global_inc), size=.3)+
+  geom_line(size=1, col="#3366FF")+
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
+  labs(y="Disease incidence ", x = "Disease severity index")+
+  my_theme + 
+  # conc_set +
+  geom_richtext(
+    data = df0,
+    aes(x=x, y=y, label = label),
+    hjust = 1, vjust = 0, 
+    label.color = NA, fill = NA
+  )
+p0
+
+# ggsave(last_plot(), file = "plots/DSI_inc.png", units="in", w=4, h=4)
+
+```
+
+Class 1 incidence vs Disease incidence
 
 ```{r}
 m1<-lme(class.1_inc ~ global_inc, 
@@ -245,7 +308,7 @@ dat1 %>%
 Fixed effects plot 
 
 ```{r}
-df1 <- data.frame(x = 0, y = 50,
+df1 <- data.frame(x = 0, y = 25,
   label = glue(
     "y = {round(summary(m1)$tTable[1,1],3)} + {round(summary(m1)$tTable[2,1],3)} * x\n"
     )  
@@ -260,7 +323,9 @@ p1 <- ggpredict(m1, terms="global_inc [all]") %>%
   geom_line(size=1, col="#3366FF")+
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
   labs(y="Class-1 Incidence ",  x = element_blank())+
-  my_theme + conc_set +
+  ylim(0,25)+
+  my_theme + 
+  # conc_set +
   geom_richtext(
     data = df1,
     aes(x=x, y=y, label = label),
@@ -315,7 +380,7 @@ ggsave(last_plot(), file = "plots/class2_id_level.png", units="in", w=6, h=4)
 ```
 
 ```{r}
-df2 <- data.frame(x = 0, y = 50,
+df2 <- data.frame(x = 0, y = 25,
   label = glue(
     "y = {round(summary(m2)$tTable[1,1],2)} + {round(summary(m2)$tTable[2,1],3)} * x\n"
     # (*R<sup>2</sup>* = {round(r2_nakagawa(m2)$R2_conditional, 3)})"
@@ -331,7 +396,8 @@ p2 <- ggpredict(m2, terms="global_inc [all]") %>%
   geom_line(size=1, col="#3366FF")+
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
   labs(y="Class-2 Incidence",  x = element_blank())+
-  my_theme+conc_set + 
+  my_theme+
+  ylim(0,25)+
     geom_richtext(
     data = df2,
     aes(x=x, y=y, label = label),
@@ -384,7 +450,7 @@ ggsave(last_plot(), file = "plots/class3_id_level.png", units="in", w=6, h=4)
 ```
 
 ```{r}
-df3 <- data.frame(x = 0, y = 50,
+df3 <- data.frame(x = 0, y = 25,
   label = glue(
     "y = {round(summary(m3)$tTable[1,1],3)} + {round(summary(m3)$tTable[2,1],3)} * x\n")  
   ) 
@@ -398,7 +464,8 @@ p3 <- ggpredict(m3, terms="global_inc [all]") %>%
   geom_line(size=1, col="#3366FF")+
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
   labs(y="Class-3 Incidence ",  x = element_blank())+
-  my_theme+conc_set + 
+  my_theme+
+  ylim(0,25)+
   geom_richtext(
     data = df3,
     aes(x=x, y=y, label = label),
@@ -409,10 +476,11 @@ p3
 
 ```{r}
 m4<-lme(class.4_inc~global_inc, 
-          random = ~global_inc|id,
-          control=ctrl,
-          weights=varPower(form = ~global_inc),
-          data=dat1)
+        random = ~global_inc|id,
+        control=ctrl,
+        weights=varPower(form = ~global_inc),
+        data=dat1)
+# summary(m4)$tTable
 ```
 
 
@@ -450,10 +518,11 @@ ggsave(last_plot(), file = "plots/class4_id_level.png", units="in", w=6, h=4)
 
 
 ```{r}
-df4 <- data.frame(x = 0, y = 50,
+df4 <- data.frame(x = 0, y = 25,
   label = glue(
     "y = {round(summary(m4)$tTable[1,1],3)} + {round(summary(m4)$tTable[2,1],3)} * x\n")  
   ) 
+
 
 p4 <- ggpredict(m4, terms="global_inc [all]") %>% 
 ggplot() +
@@ -465,7 +534,7 @@ ggplot() +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
   labs(y="Class-4 Incidence",  x = element_blank())+
   my_theme + 
-  conc_set + 
+  ylim(0,25)+
     geom_richtext(
     data = df4,
     aes(x=x, y=y, label = label),
@@ -487,9 +556,6 @@ p.1234
 As we can see, class 3 and 4 regressions are the most close to the diagonal line. So we considered including a class 3 + class 4 incidence, to test against the disease incidence.  
 
 ```{r}
-dat1<- dat1 %>% 
-  mutate(class.3.4_inc=(class_3+class_4)/total_pods*100)
-
 m3.4<-lme(class.3.4_inc~global_inc, 
           random = ~global_inc|id,
           control=ctrl,
@@ -542,12 +608,11 @@ p3.4 <- ggpredict(m3.4, terms="global_inc [all]") %>%
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
   labs(y="Class-3+4 Incidence ", x="")+
   my_theme + 
-  conc_set + 
   geom_richtext(
     data = df3.4,
     aes(x=x, y=y, label = label),
     hjust = 0, vjust = 1, 
-    label.color = NA
+    label.color = NA, fill = NA
   ) 
 p3.4
 ```
@@ -563,3 +628,87 @@ p3.4
 ```{r, eval =F}
 ggsave(last_plot(), file = "plots/regressions.png", width = 9, height = 6)
 ```
+
+```{r}
+m3.4_dsi<-lme(class.3.4_inc~DSI, 
+          random = ~DSI|id,
+          control=ctrl,
+          weights=varPower(form = ~DSI),
+          data=dat1)
+```
+
+
+```{r}
+png(filename="plots/class3.4_reg_diagnostics.png",
+    type="cairo",
+    units="in",
+    width=4,
+    height=4,
+    pointsize=12,
+    res=96)
+```
+
+```{r}
+plot(m3.4_dsi)
+dev.off()
+```
+
+```{r}
+dat1 %>% 
+  ggplot() +
+  aes(x = DSI, y = class.3.4_inc)+
+  facet_wrap(~id) +
+  geom_point(alpha = 0.5) +
+  geom_line(data = cbind(dat1, pred = predict(m3.4_dsi)), aes(y = pred), size = 1)+
+  my_theme2 + conc_set
+
+ggsave(last_plot(), file = "plots/class3.4_id_level.png", units="in", w=6, h=4)
+```
+
+```{r}
+df3.4_dsi <- data.frame(x = 0, y = 50,
+  label = glue(
+    "y = {round(summary(m3.4_dsi)$tTable[1,1],3)} + {round(summary(m3.4_dsi)$tTable[2,1],3)} * x\n")  
+  ) 
+
+p3.4_dsi <- ggpredict(m3.4_dsi, terms="DSI [all]") %>% 
+  ggplot() +
+  aes(x = x, y = predicted)  +
+  geom_smooth(data=dat1, aes(x = DSI, y = class.3.4_inc, group=id), 
+              method="lm", se=F, col="grey30", size=.5)+
+  geom_point(data=dat1, aes(x = DSI, y = class.3.4_inc), size=.3)+
+  geom_line(size=1, col="#3366FF")+
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = .1) +
+  labs(y="SDP Incidence ", x="Disease severity index")+
+  my_theme + 
+  conc_set + 
+  geom_richtext(
+    data = df3.4_dsi,
+    aes(x=x, y=y, label = label),
+    hjust = 0, vjust = 1, 
+    label.color = NA, fill = NA
+  ) 
+p3.4_dsi
+```
+
+```{r}
+p.DSI <- p0 + p3.4_dsi 
+p.DSI
+
+ggsave(last_plot(), file = "plots/DSI_final.png", units="in", w=6, h=4)
+```
+
+```{r}
+pacman::p_load(googlesheets4)
+gs4_auth(email = "edwardsmolina@gmail.com")
+gs4_find("peanut_smut_survey")
+
+smut <- gs4_get("14gu9pKMo773qaEhgJCN2zxgKCOFQ5OaQym3eVZ9R7YA")
+
+compare_performance(m1, m2, m3, m4, m3.4, m0, m3.4_dsi, 
+                    rank=F, 
+                    metrics = c("AIC","R2", "RMSE")) %>% 
+  write_sheet(ss=smut, sheet = "rmse")
+
+```
+
